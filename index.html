@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>双问题投票 - 实时在线与号量统计</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f0f4fa 0%, #d9e0e8 100%);
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .vote-card {
+            max-width: 560px;
+            width: 100%;
+            background: rgba(255,255,255,0.96);
+            border-radius: 48px;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.5);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .header {
+            background: #1e2a3e;
+            padding: 28px 24px 20px 24px;
+            text-align: center;
+            color: white;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .header:active { background: #2c3e50; }
+        .header h1 {
+            margin: 0;
+            font-size: 1.9rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+        .header p {
+            margin: 8px 0 0;
+            opacity: 0.8;
+            font-size: 0.85rem;
+        }
+
+        /* 问题区块通用 */
+        .question-block {
+            padding: 20px 22px 10px;
+            border-bottom: 1px solid #eef2f8;
+        }
+        .question-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #1f3b4c;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #eef3fc;
+            padding: 8px 16px;
+            border-radius: 60px;
+        }
+        .question-num {
+            background: #2c7da0;
+            color: white;
+            border-radius: 40px;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .options-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .option-item {
+            background: white;
+            border-radius: 60px;
+            border: 1px solid #e2eaf1;
+            transition: all 0.2s;
+        }
+        .option-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 22px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #1f2a3e;
+        }
+        .option-text {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .custom-radio {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #b9c4d0;
+            background: white;
+            transition: 0.1s;
+        }
+        input[type="radio"] { display: none; }
+        input[type="radio"]:checked + .custom-radio {
+            border-color: #2c7da0;
+            background: #2c7da0;
+            box-shadow: inset 0 0 0 4px white;
+        }
+
+        .vote-btn-wrapper {
+            padding: 20px 22px 28px;
+        }
+        .vote-btn {
+            width: 100%;
+            background: #1f6392;
+            border: none;
+            padding: 16px 0;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.15s;
+            box-shadow: 0 6px 14px rgba(31,99,146,0.3);
+        }
+        .vote-btn:active { transform: scale(0.97); background: #0e4a6f; }
+
+        /* 开发者面板 (默认隐藏) */
+        .dev-panel {
+            margin: 12px 20px 28px;
+            background: #f2f4f8;
+            border-radius: 32px;
+            padding: 18px 20px;
+            border: 1px solid #cddae9;
+            display: none;
+        }
+        .dev-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 2px dashed #8f9bb3;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
+        }
+        .lock-icon {
+            background: #2c3e50;
+            color: #f7c948;
+            border-radius: 40px;
+            padding: 2px 10px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        .stats-two-questions {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .stat-question {
+            background: white;
+            border-radius: 24px;
+            padding: 12px;
+        }
+        .stat-q-title {
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #1e4663;
+            font-size: 0.9rem;
+        }
+        .stat-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .stat-badge {
+            background: #eef2fa;
+            border-radius: 40px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            flex: 1 0 auto;
+            text-align: center;
+        }
+        .stat-number {
+            font-weight: 800;
+            font-size: 1.2rem;
+            margin-right: 4px;
+            color: #1f3b4c;
+        }
+        .total-votes {
+            margin-top: 12px;
+            background: #e9edf2;
+            border-radius: 30px;
+            padding: 8px;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .dev-reset-btn { text-align: right; margin-top: 12px; }
+        .dev-reset-btn button {
+            background: #cfdfed;
+            border: none;
+            font-size: 0.7rem;
+            padding: 4px 12px;
+            border-radius: 50px;
+            cursor: pointer;
+        }
+        footer {
+            text-align: center;
+            font-size: 0.7rem;
+            padding: 12px 20px 24px;
+            color: #6d7f96;
+        }
+        .toast-message {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) scale(0.9);
+            background: #1e2a3ee6;
+            backdrop-filter: blur(8px);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 60px;
+            font-size: 0.85rem;
+            opacity: 0;
+            transition: 0.2s;
+            pointer-events: none;
+            z-index: 1000;
+            white-space: nowrap;
+        }
+        .toast-show { opacity: 1; transform: translateX(-50%) scale(1); }
+        @media (max-width: 500px) {
+            .question-title { font-size: 1.1rem; }
+            .option-label { padding: 10px 16px; }
+            .stat-badge { font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="vote-card">
+    <div class="header" id="devActivationHeader">
+        <h1>📋 双场景投票</h1>
+        <p>明天下午 ~ 周一12:00 实时能力 & 在线号量</p>
+    </div>
+
+    <!-- 问题一 -->
+    <div class="question-block">
+        <div class="question-title">
+            <span class="question-num">1</span> 
+            <span>明天下午至周一 12:00 能否实时投票？</span>
+        </div>
+        <div class="options-group" id="q1Group">
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">✅ 能（跳转到问题二）</span>
+                    <input type="radio" name="q1" value="能_跳转">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">📱 不能，手里有 1 个号</span>
+                    <input type="radio" name="q1" value="不能_1号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">📱 不能，手里有 2 个号</span>
+                    <input type="radio" name="q1" value="不能_2号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">📱 不能，手里有 3 个号</span>
+                    <input type="radio" name="q1" value="不能_3号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">📱 不能，手里有大于等于 4 个号</span>
+                    <input type="radio" name="q1" value="不能_4及以上">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 问题二 (始终可见，无需跳转逻辑，但提交时独立校验) -->
+    <div class="question-block" id="q2Block">
+        <div class="question-title">
+            <span class="question-num">2</span> 
+            <span>周一 11:30–12:00 是否能一直在线？</span>
+        </div>
+        <div class="options-group" id="q2Group">
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">⏱️ 能，还有 1 个号没投</span>
+                    <input type="radio" name="q2" value="能_剩1号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">⏱️ 能，还有 2 个号没投</span>
+                    <input type="radio" name="q2" value="能_剩2号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">⏱️ 能，还有 3 个号没投</span>
+                    <input type="radio" name="q2" value="能_剩3号">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">⏱️ 能，还有大于等于 4 个号没投</span>
+                    <input type="radio" name="q2" value="能_剩4及以上">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+            <div class="option-item">
+                <label class="option-label">
+                    <span class="option-text">❌ 不能</span>
+                    <input type="radio" name="q2" value="不能">
+                    <span class="custom-radio"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="vote-btn-wrapper">
+        <button class="vote-btn" id="submitVoteBtn">📮 提交投票</button>
+    </div>
+
+    <!-- 开发者面板（仅开发者可见） -->
+    <div class="dev-panel" id="devPanel">
+        <div class="dev-header">
+            <span>🔧</span>
+            <h3>开发者后台 · 实时统计数据</h3>
+            <div class="lock-icon">仅开发可见</div>
+        </div>
+        <div class="stats-two-questions" id="statsArea">
+            <!-- 动态填充统计数据 -->
+        </div>
+        <div class="total-votes" id="totalVotesDisplay">总投票人数: 0</div>
+        <div class="dev-reset-btn" id="devResetContainer"></div>
+        <div class="note-dev" style="font-size:0.7rem; margin-top:10px;">⚡ 数据存储于本地 | 每人限投一次</div>
+    </div>
+    <footer>扫码参与 · 结果仅开发者可见</footer>
+</div>
+<div id="toastMsg" class="toast-message"></div>
+
+<script>
+    // ======================= 权限控制 (仅开发者可见) =======================
+    const ADMIN_URL_FLAG = 'admin';
+    const LOCALSTORAGE_DEV_KEY = 'dev_secret_key';
+    const DEV_SECRET_VALUE = 'vote_admin_2026';
+    
+    function getUrlParameter(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name);
+    }
+    
+    function isDeveloperMode() {
+        const urlAdmin = getUrlParameter(ADMIN_URL_FLAG);
+        if (urlAdmin === 'true') return true;
+        return localStorage.getItem(LOCALSTORAGE_DEV_KEY) === DEV_SECRET_VALUE;
+    }
+    
+    function enableDeveloperMode() {
+        localStorage.setItem(LOCALSTORAGE_DEV_KEY, DEV_SECRET_VALUE);
+        return true;
+    }
+    
+    let isAdmin = isDeveloperMode();
+    const devPanelEl = document.getElementById('devPanel');
+    function updateDevPanelVisibility() {
+        if (isAdmin) {
+            if (devPanelEl) devPanelEl.style.display = 'block';
+        } else {
+            if (devPanelEl) devPanelEl.style.display = 'none';
+        }
+    }
+    
+    // 连续点击标题5次激活开发者 (隐藏手势)
+    let clickCnt = 0;
+    let clickTimer = null;
+    const headerEl = document.getElementById('devActivationHeader');
+    if (headerEl) {
+        headerEl.addEventListener('click', () => {
+            if (isAdmin) return;
+            clickCnt++;
+            if (clickTimer) clearTimeout(clickTimer);
+            if (clickCnt >= 5) {
+                enableDeveloperMode();
+                isAdmin = true;
+                updateDevPanelVisibility();
+                renderStatsPanel();    // 刷新统计面板
+                showToast('🔓 开发者模式已启用，后台数据可见', 2200);
+                clickCnt = 0;
+            } else {
+                showToast(`再点 ${5 - clickCnt} 次激活后台`, 700);
+            }
+            clickTimer = setTimeout(() => { clickCnt = 0; }, 2000);
+        });
+    }
+    
+    // ======================= 投票数据结构 =======================
+    // 两个问题完全独立，所有人都需要回答两个问题
+    const STORAGE_VOTES_KEY = 'double_question_votes_v2';
+    const STORAGE_DEVICE_ID_KEY = 'voter_double_device_v2';
+    
+    // 统计数据
+    let statsQ1 = {
+        "能_跳转": 0,
+        "不能_1号": 0,
+        "不能_2号": 0,
+        "不能_3号": 0,
+        "不能_4及以上": 0
+    };
+    let statsQ2 = {
+        "能_剩1号": 0,
+        "能_剩2号": 0,
+        "能_剩3号": 0,
+        "能_剩4及以上": 0,
+        "不能": 0
+    };
+    let totalParticipants = 0;
+    
+    // 加载已有统计
+    function loadStats() {
+        const stored = localStorage.getItem(STORAGE_VOTES_KEY);
+        if (stored) {
+            try {
+                const data = JSON.parse(stored);
+                statsQ1 = data.statsQ1 || { ...statsQ1 };
+                statsQ2 = data.statsQ2 || { ...statsQ2 };
+                totalParticipants = data.totalParticipants || 0;
+                // 确保字段完整
+                Object.keys(statsQ1).forEach(k => { if (statsQ1[k] === undefined) statsQ1[k] = 0; });
+                Object.keys(statsQ2).forEach(k => { if (statsQ2[k] === undefined) statsQ2[k] = 0; });
+            } catch(e) { console.warn(e); }
+        } else {
+            saveStats();
+        }
+    }
+    
+    function saveStats() {
+        const toStore = {
+            statsQ1: statsQ1,
+            statsQ2: statsQ2,
+            totalParticipants: totalParticipants
+        };
+        localStorage.setItem(STORAGE_VOTES_KEY, JSON.stringify(toStore));
+    }
+    
+    function getDeviceId() {
+        let deviceId = localStorage.getItem(STORAGE_DEVICE_ID_KEY);
+        if (!deviceId) {
+            deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2);
+            localStorage.setItem(STORAGE_DEVICE_ID_KEY, deviceId);
+        }
+        return deviceId;
+    }
+    
+    function hasVoted() {
+        const deviceId = getDeviceId();
+        return localStorage.getItem(`voted_double_${deviceId}`) === 'true';
+    }
+    
+    function markVoted() {
+        const deviceId = getDeviceId();
+        localStorage.setItem(`voted_double_${deviceId}`, 'true');
+    }
+    
+    // 辅助展示文本映射
+    function getQ1Display(value) {
+        const map = {
+            "能_跳转": "✅ 能（跳转到问题二）",
+            "不能_1号": "📱 不能，手里有 1 个号",
+            "不能_2号": "📱 不能，手里有 2 个号",
+            "不能_3号": "📱 不能，手里有 3 个号",
+            "不能_4及以上": "📱 不能，手里有 ≥4 个号"
+        };
+        return map[value] || value;
+    }
+    
+    function getQ2Display(value) {
+        const map = {
+            "能_剩1号": "⏱️ 能，还有 1 个号没投",
+            "能_剩2号": "⏱️ 能，还有 2 个号没投",
+            "能_剩3号": "⏱️ 能，还有 3 个号没投",
+            "能_剩4及以上": "⏱️ 能，还有 ≥4 个号没投",
+            "不能": "❌ 不能"
+        };
+        return map[value] || value;
+    }
+    
+    // 渲染开发者统计面板
+    function renderStatsPanel() {
+        if (!isAdmin) return;
+        const container = document.getElementById('statsArea');
+        if (!container) return;
+        
+        // 构建问题一统计
+        const q1Items = Object.entries(statsQ1).map(([key, count]) => `
+            <div class="stat-badge">
+                <span class="stat-number">${count}</span> ${getQ1Display(key)}
+            </div>
+        `).join('');
+        
+        const q2Items = Object.entries(statsQ2).map(([key, count]) => `
+            <div class="stat-badge">
+                <span class="stat-number">${count}</span> ${getQ2Display(key)}
+            </div>
+        `).join('');
+        
+        const html = `
+            <div class="stat-question">
+                <div class="stat-q-title">📊 问题一：明天下午~周一12:00能否实时投票？</div>
+                <div class="stat-grid">${q1Items || '暂无数据'}</div>
+            </div>
+            <div class="stat-question">
+                <div class="stat-q-title">⏰ 问题二：周一 11:30–12:00 是否能一直在线？</div>
+                <div class="stat-grid">${q2Items || '暂无数据'}</div>
+            </div>
+        `;
+        container.innerHTML = html;
+        const totalSpan = document.getElementById('totalVotesDisplay');
+        if (totalSpan) totalSpan.innerText = `👥 总投票参与人数: ${totalParticipants}`;
+        
+        // 重置按钮容器
+        const resetContainer = document.getElementById('devResetContainer');
+        if (resetContainer && !resetContainer.hasChildNodes()) {
+            const resetBtn = document.createElement('button');
+            resetBtn.innerText = '🔄 重置全部数据 (仅开发)';
+            resetBtn.onclick = () => {
+                if (confirm('⚠️ 重置将清空所有投票记录（包括已投设备），确定吗？')) {
+                    // 重置统计
+                    statsQ1 = {
+                        "能_跳转": 0, "不能_1号": 0, "不能_2号": 0, "不能_3号": 0, "不能_4及以上": 0
+                    };
+                    statsQ2 = {
+                        "能_剩1号": 0, "能_剩2号": 0, "能_剩3号": 0, "能_剩4及以上": 0, "不能": 0
+                    };
+                    totalParticipants = 0;
+                    saveStats();
+                    // 清除所有投票标记
+                    const keysToDel = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && k.startsWith('voted_double_')) keysToDel.push(k);
+                    }
+                    keysToDel.forEach(k => localStorage.removeItem(k));
+                    renderStatsPanel();
+                    showToast('所有投票数据已重置', 1800);
+                }
+            };
+            resetContainer.appendChild(resetBtn);
+        }
+    }
+    
+    // 显示提示
+    let toastTimeout = null;
+    function showToast(msg, duration = 2000) {
+        const toast = document.getElementById('toastMsg');
+        if (!toast) return;
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toast.innerText = msg;
+        toast.classList.add('toast-show');
+        toastTimeout = setTimeout(() => toast.classList.remove('toast-show'), duration);
+    }
+    
+    // 提交投票 (校验 + 存储)
+    let submitting = false;
+    function submitVote() {
+        if (submitting) {
+            showToast('请稍后提交', 800);
+            return;
+        }
+        if (hasVoted()) {
+            showToast('❌ 您已经投过票了！每人仅限参与一次。', 2200);
+            return;
+        }
+        
+        // 获取问题一答案
+        const selectedQ1 = document.querySelector('input[name="q1"]:checked');
+        if (!selectedQ1) {
+            showToast('请先回答问题一', 1500);
+            return;
+        }
+        const q1Value = selectedQ1.value;
+        
+        // 获取问题二答案（所有人都需要回答问题二）
+        const selectedQ2 = document.querySelector('input[name="q2"]:checked');
+        if (!selectedQ2) {
+            showToast('请回答问题二：周一 11:30-12:00 是否能一直在线？', 1800);
+            return;
+        }
+        const q2Value = selectedQ2.value;
+        
+        submitting = true;
+        
+        // 更新统计数据
+        if (statsQ1.hasOwnProperty(q1Value)) {
+            statsQ1[q1Value] += 1;
+        } else {
+            statsQ1[q1Value] = 1;
+        }
+        
+        if (statsQ2.hasOwnProperty(q2Value)) {
+            statsQ2[q2Value] += 1;
+        } else {
+            statsQ2[q2Value] = 1;
+        }
+        
+        totalParticipants += 1;
+        saveStats();
+        markVoted();
+        
+        // 如果开发者模式开启，刷新面板
+        if (isAdmin) renderStatsPanel();
+        
+        // 给出成功提示
+        let msg = `✓ 投票成功！\n问题一：${getQ1Display(q1Value)}\n问题二：${getQ2Display(q2Value)}`;
+        showToast(msg, 2800);
+        
+        submitting = false;
+    }
+    
+    // 绑定提交按钮
+    document.getElementById('submitVoteBtn')?.addEventListener('click', submitVote);
+    
+    // 初始化页面: 加载数据，控制面板可见
+    function init() {
+        loadStats();
+        updateDevPanelVisibility();
+        if (isAdmin) renderStatsPanel();
+        // 检查已投票提示
+        if (hasVoted()) {
+            setTimeout(() => showToast('📌 您之前已经投过票，感谢参与', 2000), 800);
+        }
+    }
+    
+    init();
+</script>
+</body>
+</html>
